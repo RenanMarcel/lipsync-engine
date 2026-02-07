@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenAI Realtime + LipSync Engine</title>
+  <style>
+    :root {
+      --bg: #0f0f13;
+      --surface: #1a1a24;
+      --border: #2a2a3a;
+      --text: #e0e0e8;
+      --muted: #8888a0;
+      --accent: #6c63ff;
+      --accent-dim: #4a43cc;
+      --green: #44cc88;
+      --red: #cc4455;
+      --orange: #cc8844;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    h1 { font-size: 1.6rem; font-weight: 600; margin-bottom: 4px; }
+    .subtitle { color: var(--muted); font-size: 0.85rem; margin-bottom: 24px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 768px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .card h2 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card h2 .icon { font-size: 1.2rem; }
+
+    /* Avatar area */
+    .avatar-area {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px;
+    }
+
+    .avatar-wrapper {
+      position: relative;
+      width: 280px;
+      margin-bottom: 16px;
+    }
+
+    .avatar-wrapper img {
+      width: 100%;
+      height: auto;
+      display: block;
+      image-rendering: pixelated;
+    }
+
+    #mouth-container {
+      position: absolute;
+      /* Positioned over the character's mouth area */
+      top: calc(17.5% + 10px);
+      left: calc(50% - 4px);
+      transform: translateX(-50%);
+      width: 29px;
+      height: 19px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 10;
+      image-rendering: pixelated;
+    }
+
+    /* Pixel-art style for the SVG mouth */
+    #mouth-container svg {
+      shape-rendering: crispEdges;
+      image-rendering: pixelated;
+      filter: contrast(1.5) saturate(0.8);
+    }
+
+    .viseme-label {
+      font-size: 1.8rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent);
+    }
+
+    .viseme-info {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    /* Status indicator */
+    .status-bar {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 20px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--red);
+      flex-shrink: 0;
+    }
+    .status-dot.connected { background: var(--green); animation: pulse 1.5s infinite; }
+    .status-dot.connecting { background: var(--orange); animation: pulse 0.8s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .status-text {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    /* Buttons */
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    button {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.15s;
+    }
+
+    button:hover { border-color: var(--accent); background: #222238; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    button.primary:hover { background: var(--accent-dim); }
+
+    button.danger {
+      background: var(--red);
+      border-color: var(--red);
+      color: #fff;
+    }
+
+    /* Slider */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 8px 0;
+    }
+
+    .slider-row label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      min-width: 60px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+    }
+
+    .slider-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    select {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.85rem;
+    }
+
+    /* Transcript */
+    #transcript {
+      max-height: 300px;
+      overflow-y: auto;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      background: rgba(0,0,0,0.3);
+      padding: 12px;
+      border-radius: 8px;
+    }
+
+    .msg {
+      margin-bottom: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+    }
+
+    .msg.user {
+      background: rgba(108, 99, 255, 0.15);
+      border-left: 3px solid var(--accent);
+    }
+
+    .msg.assistant {
+      background: rgba(68, 204, 136, 0.1);
+      border-left: 3px solid var(--green);
+    }
+
+    .msg-role {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+
+    .msg.error {
+      background: rgba(204, 68, 85, 0.15);
+      border-left: 3px solid var(--red);
+      color: var(--red);
+    }
+
+    /* Band visualizer */
+    .bands {
+      display: flex;
+      gap: 6px;
+      height: 80px;
+      align-items: flex-end;
+      margin-top: 12px;
+    }
+
+    .band {
+      flex: 1;
+      background: var(--accent);
+      border-radius: 4px 4px 0 0;
+      min-height: 2px;
+      transition: height 0.08s ease-out;
+      position: relative;
+    }
+
+    .band-label {
+      position: absolute;
+      bottom: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.6rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+
+    .stat {
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    .stat-label {
+      font-size: 0.65rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div style="max-width:1100px; margin:0 auto;">
+    <h1>OpenAI Realtime + LipSync</h1>
+    <p class="subtitle">Voice conversation with real-time lip sync via GPT-4o Realtime API</p>
+  </div>
+
+  <div class="grid">
+    <!-- Status bar -->
+    <div class="card status-bar">
+      <div class="status-dot" id="status-dot"></div>
+      <span class="status-text" id="status-text">Disconnected</span>
+    </div>
+
+    <!-- Avatar -->
+    <div class="card avatar-area">
+      <div class="avatar-wrapper">
+        <img src="avatar.png" alt="Avatar">
+        <div id="mouth-container"></div>
+      </div>
+      <div class="viseme-label" id="viseme-display">sil</div>
+      <div class="viseme-info" id="viseme-info">Silent</div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card">
+      <h2><span class="icon">&#x1f3a4;</span> Controls</h2>
+
+      <div class="btn-group">
+        <button id="btn-start" class="primary">Start Session</button>
+        <button id="btn-stop" class="danger" disabled>Stop Session</button>
+      </div>
+
+      <div class="slider-row">
+        <label>Voice</label>
+        <select id="voice-select">
+          <option value="alloy">Alloy</option>
+          <option value="ash">Ash</option>
+          <option value="ballad">Ballad</option>
+          <option value="coral">Coral</option>
+          <option value="echo">Echo</option>
+          <option value="sage" selected>Sage</option>
+          <option value="shimmer">Shimmer</option>
+          <option value="verse">Verse</option>
+        </select>
+      </div>
+
+      <div class="slider-row">
+        <label>Volume</label>
+        <input type="range" id="slider-volume" min="0" max="100" value="80">
+        <span class="slider-value" id="volume-value">80%</span>
+      </div>
+
+      <div class="stats-grid" style="margin-top: 16px;">
+        <div class="stat">
+          <div class="stat-label">Viseme</div>
+          <div class="stat-value" id="stat-viseme">sil</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Intensity</div>
+          <div class="stat-value" id="stat-intensity">0.000</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Buffer</div>
+          <div class="stat-value" id="stat-buffer">0%</div>
+        </div>
+      </div>
+
+      <div class="bands" id="band-visualizer">
+        <div class="band" id="band-sub"><span class="band-label">Sub</span></div>
+        <div class="band" id="band-low"><span class="band-label">Low</span></div>
+        <div class="band" id="band-mid"><span class="band-label">Mid</span></div>
+        <div class="band" id="band-high"><span class="band-label">High</span></div>
+        <div class="band" id="band-veryHigh"><span class="band-label">V.Hi</span></div>
+      </div>
+    </div>
+
+    <!-- Transcript -->
+    <div class="card">
+      <h2><span class="icon">&#x1f4ac;</span> Transcript</h2>
+      <div id="transcript">
+        <div style="color: var(--muted); font-size: 0.8rem;">Click "Start Session" to begin a voice conversation.</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import {
+      LipSyncEngine,
+      SVGMouthRenderer,
+      EXTENDED_VISEMES,
+      base64ToInt16,
+      float32ToInt16,
+      int16ToBase64,
+    } from '../src/index.js';
+
+    // ── State ──────────────────────────────────────────────────
+    let engine = null;
+    let mouth = null;
+    let ws = null;
+    let captureCtx = null;
+    let micStream = null;
+    let scriptNode = null;
+
+    // Track the current assistant message element for streaming text
+    let currentAssistantMsg = null;
+
+    // ── DOM refs ───────────────────────────────────────────────
+    const $ = (id) => document.getElementById(id);
+
+    function setStatus(state, text) {
+      $('status-dot').className = 'status-dot' + (state ? ' ' + state : '');
+      $('status-text').textContent = text;
+    }
+
+    function addTranscript(role, text) {
+      const container = $('transcript');
+      const div = document.createElement('div');
+      div.className = `msg ${role}`;
+      div.innerHTML = `<div class="msg-role">${role}</div><div class="msg-text">${escapeHtml(text)}</div>`;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+      return div;
+    }
+
+    function escapeHtml(str) {
+      const el = document.createElement('span');
+      el.textContent = str;
+      return el.innerHTML;
+    }
+
+    // ── Start session ──────────────────────────────────────────
+    $('btn-start').addEventListener('click', async () => {
+      try {
+        $('btn-start').disabled = true;
+        setStatus('connecting', 'Initializing...');
+
+        // 1. Create and init LipSyncEngine (24kHz for OpenAI)
+        engine = new LipSyncEngine({
+          sampleRate: 24000,
+          workletUrl: '../src/worklets/streaming-processor.js',
+        });
+        await engine.init();
+
+        // 2. Create SVG mouth renderer (pixel art style)
+        mouth = new SVGMouthRenderer($('mouth-container'), {
+          width: 24,
+          height: 16,
+          lipColor: '#b5624e',
+          innerColor: '#3a0e0e',
+          teethColor: '#e8d8c8',
+          showTeeth: false,
+          lipThickness: 2,
+        });
+
+        // 3. Wire viseme events
+        engine.on('viseme', (frame) => {
+          mouth.render(frame);
+          $('viseme-display').textContent = frame.viseme;
+          const info = EXTENDED_VISEMES[frame.viseme];
+          $('viseme-info').textContent = info ? `${info.label} — ${info.description}` : frame.viseme;
+          $('stat-viseme').textContent = frame.viseme;
+          $('stat-intensity').textContent = frame.intensity.toFixed(3);
+          $('stat-buffer').textContent = `${(frame.bufferLevel * 100).toFixed(0)}%`;
+
+          if (frame.bands) {
+            for (const [name, energy] of Object.entries(frame.bands)) {
+              const bar = $(`band-${name}`);
+              if (bar) bar.style.height = `${Math.max(2, energy * 80)}px`;
+            }
+          }
+        });
+
+        engine.startAnalysis();
+
+        // 4. Set up mic capture at 24kHz (separate AudioContext)
+        captureCtx = new AudioContext({ sampleRate: 24000 });
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const micSource = captureCtx.createMediaStreamSource(micStream);
+
+        // ScriptProcessorNode to capture raw PCM
+        scriptNode = captureCtx.createScriptProcessor(2048, 1, 1);
+        scriptNode.onaudioprocess = (e) => {
+          if (!ws || ws.readyState !== WebSocket.OPEN) return;
+          const float32 = e.inputBuffer.getChannelData(0);
+          const int16 = float32ToInt16(float32);
+          const base64 = int16ToBase64(int16);
+          ws.send(JSON.stringify({
+            type: 'input_audio_buffer.append',
+            audio: base64,
+          }));
+        };
+
+        micSource.connect(scriptNode);
+        // Connect to destination to keep the processor alive (outputs silence)
+        scriptNode.connect(captureCtx.destination);
+
+        // 5. Set volume
+        const vol = parseInt($('slider-volume').value) / 100;
+        engine.setVolume(vol);
+
+        // 6. Open WebSocket to proxy
+        setStatus('connecting', 'Connecting to OpenAI...');
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(`${proto}//${location.host}/ws/realtime`);
+
+        ws.onopen = () => {
+          setStatus('connected', 'Connected — speak to begin');
+          $('btn-stop').disabled = false;
+
+          // Send session.update (GA format for gpt-realtime)
+          ws.send(JSON.stringify({
+            type: 'session.update',
+            session: {
+              output_modalities: ['audio'],
+              audio: {
+                input: {
+                  format: { type: 'audio/pcm', rate: 24000 },
+                  turn_detection: { type: 'server_vad' },
+                  transcription: { model: 'gpt-4o-mini-transcribe' },
+                },
+                output: {
+                  format: { type: 'audio/pcm', rate: 24000 },
+                  voice: $('voice-select').value,
+                },
+              },
+            },
+          }));
+
+          // Clear default transcript text
+          $('transcript').innerHTML = '';
+        };
+
+        ws.onmessage = async (e) => {
+          const text = (e.data instanceof Blob) ? await e.data.text() : e.data;
+          const event = JSON.parse(text);
+          handleServerEvent(event);
+        };
+
+        ws.onclose = () => {
+          setStatus('', 'Disconnected');
+          $('btn-start').disabled = false;
+          $('btn-stop').disabled = true;
+        };
+
+        ws.onerror = (err) => {
+          console.error('WebSocket error:', err);
+          setStatus('', 'Connection error');
+          addTranscript('error', 'WebSocket connection failed. Is the server running?');
+          cleanup();
+        };
+
+      } catch (err) {
+        console.error('Start failed:', err);
+        setStatus('', 'Error: ' + err.message);
+        addTranscript('error', err.message);
+        cleanup();
+      }
+    });
+
+    // ── Handle OpenAI server events ────────────────────────────
+    function handleServerEvent(event) {
+      switch (event.type) {
+        // GA: response.output_audio.delta, Beta: response.audio.delta
+        case 'response.output_audio.delta':
+        case 'response.audio.delta': {
+          const int16 = base64ToInt16(event.delta);
+          engine.feedAudio(int16);
+          break;
+        }
+
+        // GA: response.output_audio_transcript.delta, Beta: response.audio_transcript.delta
+        case 'response.output_audio_transcript.delta':
+        case 'response.audio_transcript.delta': {
+          if (!currentAssistantMsg) {
+            currentAssistantMsg = addTranscript('assistant', '');
+          }
+          const textEl = currentAssistantMsg.querySelector('.msg-text');
+          textEl.textContent += event.delta;
+          $('transcript').scrollTop = $('transcript').scrollHeight;
+          break;
+        }
+
+        case 'response.output_audio.done':
+        case 'response.audio.done': {
+          currentAssistantMsg = null;
+          break;
+        }
+
+        case 'conversation.item.input_audio_transcription.completed': {
+          if (event.transcript && event.transcript.trim()) {
+            addTranscript('user', event.transcript.trim());
+          }
+          break;
+        }
+
+        case 'input_audio_buffer.speech_started': {
+          engine.clearBuffer();
+          engine.reset();
+          engine.startAnalysis();
+          currentAssistantMsg = null;
+          break;
+        }
+
+        case 'error': {
+          console.error('OpenAI error:', event.error);
+          addTranscript('error', `API error: ${event.error?.message || JSON.stringify(event.error)}`);
+          break;
+        }
+      }
+    }
+
+    // ── Stop session ───────────────────────────────────────────
+    $('btn-stop').addEventListener('click', () => {
+      cleanup();
+      setStatus('', 'Disconnected');
+      addTranscript('error', 'Session ended.');
+    });
+
+    function cleanup() {
+      // Stop mic
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+      }
+      if (scriptNode) {
+        scriptNode.disconnect();
+        scriptNode = null;
+      }
+      if (captureCtx) {
+        captureCtx.close().catch(() => {});
+        captureCtx = null;
+      }
+
+      // Close WebSocket
+      if (ws) {
+        ws.onclose = null; // prevent re-triggering status update
+        ws.close();
+        ws = null;
+      }
+
+      // Destroy engine and renderer
+      if (mouth) {
+        mouth.destroy();
+        mouth = null;
+      }
+      if (engine) {
+        engine.destroy();
+        engine = null;
+      }
+
+      currentAssistantMsg = null;
+      $('btn-start').disabled = false;
+      $('btn-stop').disabled = true;
+    }
+
+    // ── Volume slider ──────────────────────────────────────────
+    $('slider-volume').addEventListener('input', (e) => {
+      const v = e.target.value / 100;
+      $('volume-value').textContent = `${e.target.value}%`;
+      engine?.setVolume(v);
+    });
+  </script>
+</body>
+</html>

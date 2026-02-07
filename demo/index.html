@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LipSync Engine — Interactive Demo</title>
+  <style>
+    :root {
+      --bg: #0f0f13;
+      --surface: #1a1a24;
+      --border: #2a2a3a;
+      --text: #e0e0e8;
+      --muted: #8888a0;
+      --accent: #6c63ff;
+      --accent-dim: #4a43cc;
+      --green: #44cc88;
+      --red: #cc4455;
+      --orange: #cc8844;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-bottom: 24px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    @media (max-width: 768px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .card h2 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card h2 .icon { font-size: 1.2rem; }
+
+    /* Avatar area */
+    .avatar-area {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px;
+    }
+
+    #mouth-container {
+      width: 200px;
+      height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f5deb3;
+      border-radius: 50%;
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    /* Eyes */
+    #mouth-container::before,
+    #mouth-container::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 20px;
+      background: #333;
+      border-radius: 50%;
+      top: 25px;
+    }
+    #mouth-container::before { left: 55px; }
+    #mouth-container::after { right: 55px; }
+
+    .viseme-label {
+      font-size: 1.8rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--accent);
+    }
+
+    .viseme-info {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    /* Buttons */
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    button {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.15s;
+    }
+
+    button:hover { border-color: var(--accent); background: #222238; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    button.primary:hover { background: var(--accent-dim); }
+
+    button.active {
+      background: var(--green);
+      border-color: var(--green);
+      color: #000;
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat {
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+      font-size: 1.1rem;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Band visualizer */
+    .bands {
+      display: flex;
+      gap: 6px;
+      height: 80px;
+      align-items: flex-end;
+      margin-top: 12px;
+    }
+
+    .band {
+      flex: 1;
+      background: var(--accent);
+      border-radius: 4px 4px 0 0;
+      min-height: 2px;
+      transition: height 0.08s ease-out;
+      position: relative;
+    }
+
+    .band-label {
+      position: absolute;
+      bottom: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.6rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* Status dot */
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      display: inline-block;
+    }
+    .status-dot.active { background: var(--green); animation: pulse 1.5s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Slider */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 8px 0;
+    }
+
+    .slider-row label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      min-width: 80px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+    }
+
+    .slider-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      min-width: 40px;
+      text-align: right;
+    }
+
+    /* Log */
+    #log {
+      max-height: 120px;
+      overflow-y: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      background: rgba(0,0,0,0.3);
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+
+    #log .entry { margin-bottom: 2px; }
+    #log .entry.error { color: var(--red); }
+    #log .entry.success { color: var(--green); }
+  </style>
+</head>
+<body>
+  <div style="max-width:1100px; margin:0 auto;">
+    <h1>🔊 LipSync Engine</h1>
+    <p class="subtitle">Real-time streaming lip-sync for 2D browser animation — v1.0.0</p>
+  </div>
+
+  <div class="grid">
+    <!-- Avatar -->
+    <div class="card avatar-area">
+      <div id="mouth-container"></div>
+      <div class="viseme-label" id="viseme-display">sil</div>
+      <div class="viseme-info" id="viseme-info">Silent — Mouth closed</div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card">
+      <h2><span class="icon">🎛️</span> Controls</h2>
+
+      <div class="btn-group">
+        <button id="btn-init" class="primary">Initialize Engine</button>
+        <button id="btn-destroy" disabled>Destroy</button>
+      </div>
+
+      <div class="btn-group">
+        <button id="btn-mic" disabled>🎤 Microphone</button>
+        <button id="btn-file" disabled>📁 Audio File</button>
+        <button id="btn-synth" disabled>🔊 Sine Wave</button>
+      </div>
+
+      <input type="file" id="file-input" accept="audio/*" style="display:none">
+
+      <div class="slider-row">
+        <label>Volume</label>
+        <input type="range" id="slider-volume" min="0" max="100" value="80">
+        <span class="slider-value" id="volume-value">80%</span>
+      </div>
+
+      <div class="slider-row">
+        <label>Smoothing</label>
+        <input type="range" id="slider-smooth" min="0" max="100" value="35">
+        <span class="slider-value" id="smooth-value">0.35</span>
+      </div>
+
+      <div class="slider-row">
+        <label>Threshold</label>
+        <input type="range" id="slider-threshold" min="0" max="100" value="15">
+        <span class="slider-value" id="threshold-value">0.015</span>
+      </div>
+
+      <div id="log">
+        <div class="entry">Ready. Click "Initialize Engine" to start.</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card">
+      <h2>
+        <span class="icon">📊</span> Real-time Stats
+        <span class="status-dot" id="status-dot"></span>
+      </h2>
+
+      <div class="stats-grid">
+        <div class="stat">
+          <div class="stat-label">Amplitude</div>
+          <div class="stat-value" id="stat-amplitude">0.000</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Intensity</div>
+          <div class="stat-value" id="stat-intensity">0.000</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Confidence</div>
+          <div class="stat-value" id="stat-confidence">0.000</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Buffer</div>
+          <div class="stat-value" id="stat-buffer">0%</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Viseme</div>
+          <div class="stat-value" id="stat-viseme">sil</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Simple</div>
+          <div class="stat-value" id="stat-simple">A</div>
+        </div>
+      </div>
+
+      <div class="bands" id="band-visualizer">
+        <div class="band" id="band-sub"><span class="band-label">Sub</span></div>
+        <div class="band" id="band-low"><span class="band-label">Low</span></div>
+        <div class="band" id="band-mid"><span class="band-label">Mid</span></div>
+        <div class="band" id="band-high"><span class="band-label">High</span></div>
+        <div class="band" id="band-veryHigh"><span class="band-label">V.Hi</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import the library from source -->
+  <script type="module">
+    import { LipSyncEngine, SVGMouthRenderer, EXTENDED_VISEMES } from './src/index.js';
+
+    // ── State ──────────────────────────────────────────────────
+    let engine = null;
+    let mouth = null;
+    let micStream = null;
+    let synthOscillator = null;
+    let activeSource = null;
+
+    // ── DOM refs ───────────────────────────────────────────────
+    const $ = (id) => document.getElementById(id);
+    const log = (msg, type = '') => {
+      const el = $('log');
+      const entry = document.createElement('div');
+      entry.className = `entry ${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      el.appendChild(entry);
+      el.scrollTop = el.scrollHeight;
+    };
+
+    // ── Initialize ─────────────────────────────────────────────
+    $('btn-init').addEventListener('click', async () => {
+      try {
+        engine = new LipSyncEngine({
+          sampleRate: 48000,
+          workletUrl: './src/worklets/streaming-processor.js',
+          smoothingFactor: parseFloat($('slider-smooth').value) / 100,
+          silenceThreshold: parseFloat($('slider-threshold').value) / 1000,
+        });
+
+        await engine.init();
+
+        // Create SVG mouth renderer
+        mouth = new SVGMouthRenderer($('mouth-container'), {
+          width: 120,
+          height: 80,
+          lipColor: '#cc4444',
+          innerColor: '#3a1111',
+          teethColor: '#ffffffee',
+          showTeeth: true,
+          lipThickness: 3,
+        });
+
+        // Wire up viseme events
+        engine.on('viseme', (frame) => {
+          // Update SVG mouth
+          mouth.render(frame);
+
+          // Update stats
+          $('viseme-display').textContent = frame.viseme;
+          $('viseme-info').textContent = `${EXTENDED_VISEMES[frame.viseme]?.label || '?'} — ${EXTENDED_VISEMES[frame.viseme]?.description || ''}`;
+          $('stat-amplitude').textContent = frame.amplitude.toFixed(3);
+          $('stat-intensity').textContent = frame.intensity.toFixed(3);
+          $('stat-confidence').textContent = frame.confidence.toFixed(3);
+          $('stat-buffer').textContent = `${(frame.bufferLevel * 100).toFixed(0)}%`;
+          $('stat-viseme').textContent = frame.viseme;
+          $('stat-simple').textContent = frame.simpleViseme;
+
+          // Update band visualizer
+          if (frame.bands) {
+            for (const [name, energy] of Object.entries(frame.bands)) {
+              const bar = $(`band-${name}`);
+              if (bar) bar.style.height = `${Math.max(2, energy * 80)}px`;
+            }
+          }
+        });
+
+        engine.on('playbackStarted', () => log('Playback started', 'success'));
+        engine.on('bufferUnderrun', () => log('Buffer underrun!', 'error'));
+
+        // Enable buttons
+        $('btn-init').disabled = true;
+        $('btn-mic').disabled = false;
+        $('btn-file').disabled = false;
+        $('btn-synth').disabled = false;
+        $('btn-destroy').disabled = false;
+        $('status-dot').classList.add('active');
+
+        log('Engine initialized!', 'success');
+      } catch (err) {
+        log(`Init failed: ${err.message}`, 'error');
+        console.error(err);
+      }
+    });
+
+    // ── Microphone ─────────────────────────────────────────────
+    $('btn-mic').addEventListener('click', async () => {
+      if (activeSource === 'mic') {
+        stopMic();
+        return;
+      }
+      stopAllSources();
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        engine.attachStream(micStream);
+        engine.startAnalysis();
+        activeSource = 'mic';
+        $('btn-mic').classList.add('active');
+        $('btn-mic').textContent = '🎤 Stop Mic';
+        log('Microphone active', 'success');
+      } catch (err) {
+        log(`Mic error: ${err.message}`, 'error');
+      }
+    });
+
+    function stopMic() {
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+        micStream = null;
+      }
+      engine?.stopAnalysis();
+      activeSource = null;
+      $('btn-mic').classList.remove('active');
+      $('btn-mic').textContent = '🎤 Microphone';
+      log('Microphone stopped');
+    }
+
+    // ── Audio file ─────────────────────────────────────────────
+    $('btn-file').addEventListener('click', () => {
+      $('file-input').click();
+    });
+
+    $('file-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      stopAllSources();
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const audioBuffer = await engine.audioContext.decodeAudioData(arrayBuffer);
+        const channelData = audioBuffer.getChannelData(0);
+
+        // Feed in chunks to simulate streaming
+        const chunkSize = 4800; // 100ms at 48kHz
+        let offset = 0;
+
+        log(`Playing: ${file.name} (${(audioBuffer.duration).toFixed(1)}s)`, 'success');
+        activeSource = 'file';
+        $('btn-file').classList.add('active');
+        engine.startAnalysis();
+
+        const feedChunk = () => {
+          if (offset >= channelData.length || activeSource !== 'file') {
+            $('btn-file').classList.remove('active');
+            activeSource = null;
+            log('File playback complete');
+            return;
+          }
+          const chunk = channelData.slice(offset, offset + chunkSize);
+          engine.feedAudio(chunk, audioBuffer.sampleRate);
+          offset += chunkSize;
+          setTimeout(feedChunk, 90); // slightly less than chunk duration for buffer
+        };
+
+        feedChunk();
+      } catch (err) {
+        log(`File error: ${err.message}`, 'error');
+      }
+    });
+
+    // ── Synthetic sine wave ────────────────────────────────────
+    $('btn-synth').addEventListener('click', () => {
+      if (activeSource === 'synth') {
+        stopSynth();
+        return;
+      }
+      stopAllSources();
+
+      const osc = engine.audioContext.createOscillator();
+      const lfo = engine.audioContext.createOscillator();
+      const lfoGain = engine.audioContext.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.value = 220;
+      lfo.frequency.value = 2;
+      lfoGain.gain.value = 100;
+
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc.frequency);
+      osc.connect(engine.analyserNode);
+
+      osc.start();
+      lfo.start();
+      synthOscillator = { osc, lfo };
+
+      engine.startAnalysis();
+      activeSource = 'synth';
+      $('btn-synth').classList.add('active');
+      $('btn-synth').textContent = '🔊 Stop Synth';
+      log('Synthetic wave active', 'success');
+    });
+
+    function stopSynth() {
+      if (synthOscillator) {
+        synthOscillator.osc.stop();
+        synthOscillator.lfo.stop();
+        synthOscillator = null;
+      }
+      engine?.stopAnalysis();
+      activeSource = null;
+      $('btn-synth').classList.remove('active');
+      $('btn-synth').textContent = '🔊 Sine Wave';
+      log('Synth stopped');
+    }
+
+    function stopAllSources() {
+      if (activeSource === 'mic') stopMic();
+      if (activeSource === 'synth') stopSynth();
+      if (activeSource === 'file') {
+        activeSource = null;
+        $('btn-file').classList.remove('active');
+      }
+      engine?.stopAnalysis();
+      engine?.reset();
+    }
+
+    // ── Destroy ────────────────────────────────────────────────
+    $('btn-destroy').addEventListener('click', () => {
+      stopAllSources();
+      mouth?.destroy();
+      engine?.destroy();
+      engine = null;
+      mouth = null;
+
+      $('btn-init').disabled = false;
+      $('btn-mic').disabled = true;
+      $('btn-file').disabled = true;
+      $('btn-synth').disabled = true;
+      $('btn-destroy').disabled = true;
+      $('status-dot').classList.remove('active');
+
+      log('Engine destroyed');
+    });
+
+    // ── Sliders ────────────────────────────────────────────────
+    $('slider-volume').addEventListener('input', (e) => {
+      const v = e.target.value / 100;
+      $('volume-value').textContent = `${e.target.value}%`;
+      engine?.setVolume(v);
+    });
+
+    $('slider-smooth').addEventListener('input', (e) => {
+      const v = e.target.value / 100;
+      $('smooth-value').textContent = v.toFixed(2);
+      if (engine?.analyzer) engine.analyzer.opts.smoothingFactor = v;
+    });
+
+    $('slider-threshold').addEventListener('input', (e) => {
+      const v = e.target.value / 1000;
+      $('threshold-value').textContent = v.toFixed(3);
+      if (engine?.analyzer) engine.analyzer.opts.silenceThreshold = v;
+    });
+  </script>
+</body>
+</html>
