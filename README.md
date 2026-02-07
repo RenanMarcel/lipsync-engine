@@ -4,6 +4,12 @@ Production-grade, renderer-agnostic streaming lip-sync engine for browser-based 
 
 **Zero dependencies. ~15KB minified. Works with any 2D rendering approach.**
 
+<p align="center">
+  <img src="demo/demo.gif" alt="LipSync Engine — OpenAI Realtime voice conversation with real-time lip sync" width="600">
+</p>
+
+> *Pixel art cowgirl talking via OpenAI Realtime API with real-time lip sync — [try the demo](#demos)*
+
 ## Why This Exists
 
 Existing lip-sync solutions are either C++ desktop tools (Rhubarb), tied to 3D avatars (TalkingHead), or require paid cloud APIs (Azure, ElevenLabs viseme endpoints). This library fills the gap: a lightweight, browser-native engine that takes streaming audio in and emits viseme events out — bring your own renderer.
@@ -41,10 +47,10 @@ engine.on('viseme', (frame) => mouth.render(frame));
 engine.startAnalysis();
 
 // 5. Feed audio from OpenAI Realtime API
-const ws = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview', ...);
+const ws = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-realtime', ...);
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
-  if (data.type === 'response.audio.delta') {
+  if (data.type === 'response.output_audio.delta') {
     engine.feedAudio(base64ToInt16(data.delta));
   }
 };
@@ -333,18 +339,38 @@ peerConnection.ontrack = (event) => {
 };
 ```
 
+## Demos
+
+### Interactive Demo (no API key needed)
+
+Test with microphone, audio files, or a synthetic waveform:
+
+```bash
+npm install
+npm run dev
+# Opens http://localhost:3000
+```
+
+### OpenAI Realtime Voice Demo
+
+Full voice conversation with real-time lip sync on a pixel art avatar:
+
+```bash
+npm install
+OPENAI_API_KEY=sk-... npm run demo:realtime
+# Opens http://localhost:3000/demo/realtime.html
+```
+
+Speak into your mic — the AI responds with voice and the avatar's mouth animates in real time. Uses a lightweight WebSocket proxy (`server.js`) to keep your API key server-side.
+
 ## Development
 
 ```bash
-# Install dependencies
 npm install
-
-# Run demo
-npm run dev
-# Opens http://localhost:3000
-
-# Build for distribution
-npm run build
+npm run dev          # Interactive demo
+npm run build        # Build for distribution
+npm run test         # Run tests
+npm run lint         # Lint source
 ```
 
 ### Project Structure
@@ -370,7 +396,10 @@ lipsync-engine/
 │   └── worklets/
 │       └── streaming-processor.js  # AudioWorklet (standalone)
 ├── demo/
-│   └── index.html                  # Interactive demo page
+│   ├── index.html                  # Interactive demo (mic/file/synth)
+│   ├── realtime.html               # OpenAI Realtime voice demo
+│   └── avatar.png                  # Pixel art avatar
+├── server.js                       # WebSocket proxy for Realtime API
 ├── package.json
 ├── vite.config.js
 └── README.md
